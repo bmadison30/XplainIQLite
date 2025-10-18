@@ -297,7 +297,7 @@ def render_radar_png(pillar_scores: List[Tuple[str, float, Dict[str, int]]]) -> 
         return None
 
 # =====
-# DOCX generation
+# DOCX generation - EXECUTIVE STYLE
 # =====
 def build_docx(
     company: str,
@@ -312,107 +312,269 @@ def build_docx(
     include_radar: bool = True,
     include_table: bool = True
 ) -> bytes:
-    doc = Document()
-
-    # Title & meta
-    title = doc.add_paragraph()
-    tr = title.add_run(f"{brand_name} – Summary Report")
-    tr.bold = True; tr.font.size = Pt(16); tr.font.name = "Aptos"
-
-    meta = doc.add_paragraph()
-    suffix = f" (TSD request: {tsd_name})" if tsd_name else ""
-    mr = meta.add_run(f"{company}{suffix} • {datetime.now().strftime('%b %d, %Y')}")
-    mr.font.size = Pt(10); mr.font.name = "Aptos"
-
-    # Contact Information
-    doc.add_paragraph("")
-    contact_hdr = doc.add_paragraph()
-    contact_hdr.add_run("Contact Information").bold = True
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    from docx.shared import RGBColor
     
-    contact_info = doc.add_paragraph()
-    contact_text = f"Name: {name}\nEmail: {email}\nRole: {role}"
-    if phone:
-        contact_text += f"\nPhone: {phone}"
-    contact_info.add_run(contact_text).font.size = Pt(10)
-
+    doc = Document()
+    
+    # Set narrow margins for more space
+    sections = doc.sections
+    for section in sections:
+        section.top_margin = Inches(0.75)
+        section.bottom_margin = Inches(0.75)
+        section.left_margin = Inches(0.75)
+        section.right_margin = Inches(0.75)
+    
+    # === PAGE 1: EXECUTIVE SUMMARY ===
+    
+    # Header with brand and date
+    header = doc.add_paragraph()
+    header_run = header.add_run(brand_name)
+    header_run.font.size = Pt(18)
+    header_run.font.name = "Calibri"
+    header_run.font.color.rgb = RGBColor(0, 51, 102)  # Navy blue
+    header_run.bold = True
+    
+    date_para = doc.add_paragraph()
+    date_run = date_para.add_run(datetime.now().strftime('%B %d, %Y'))
+    date_run.font.size = Pt(10)
+    date_run.font.name = "Calibri"
+    date_run.font.color.rgb = RGBColor(89, 89, 89)
+    
+    # Horizontal line
+    doc.add_paragraph("_" * 80)
+    
+    # Company name - prominent
+    company_para = doc.add_paragraph()
+    company_run = company_para.add_run(f"{company}")
+    company_run.font.size = Pt(22)
+    company_run.font.name = "Calibri"
+    company_run.bold = True
+    company_run.font.color.rgb = RGBColor(0, 0, 0)
+    
+    subtitle = doc.add_paragraph()
+    subtitle_run = subtitle.add_run("Channel Readiness Assessment")
+    subtitle_run.font.size = Pt(14)
+    subtitle_run.font.name = "Calibri"
+    subtitle_run.font.color.rgb = RGBColor(89, 89, 89)
+    
+    if tsd_name:
+        tsd_para = doc.add_paragraph()
+        tsd_run = tsd_para.add_run(f"Technology Service Distributor: {tsd_name}")
+        tsd_run.font.size = Pt(10)
+        tsd_run.font.italic = True
+    
     doc.add_paragraph("")
-
-    # Score + tier
+    
+    # Executive Summary Box
+    exec_summary = doc.add_paragraph()
+    exec_summary_title = exec_summary.add_run("EXECUTIVE SUMMARY")
+    exec_summary_title.font.size = Pt(12)
+    exec_summary_title.font.name = "Calibri"
+    exec_summary_title.bold = True
+    exec_summary_title.font.color.rgb = RGBColor(0, 51, 102)
+    
+    # Score - Large and prominent
     _tier = tier_for(overall)
-    p = doc.add_paragraph()
-    r = p.add_run(f"Channel Readiness Score: {round(overall)} / 100 – {_tier}")
-    r.bold = True; r.font.size = Pt(13); r.font.name = "Aptos"
-
+    score_para = doc.add_paragraph()
+    score_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    score_run = score_para.add_run(f"{round(overall)}")
+    score_run.font.size = Pt(48)
+    score_run.font.name = "Calibri"
+    score_run.bold = True
+    score_run.font.color.rgb = RGBColor(0, 102, 204)
+    
+    score_label = doc.add_paragraph()
+    score_label.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    label_run = score_label.add_run(f"Channel Readiness Score\n{_tier} Maturity")
+    label_run.font.size = Pt(14)
+    label_run.font.name = "Calibri"
+    label_run.font.color.rgb = RGBColor(89, 89, 89)
+    
     doc.add_paragraph("")
-
-    # Pillar summary
-    doc.add_paragraph().add_run("Pillar Summary").bold = True
-    for pname, pscore, _ in pillar_scores:
-        line = doc.add_paragraph()
-        run = line.add_run(f"• {pname}: {round(pscore)}")
-        run.font.name = "Aptos"; run.font.size = Pt(11)
-        c = doc.add_paragraph(pillar_commentary(pname, pscore))
-        c.runs[0].font.name = "Aptos"; c.runs[0].font.size = Pt(10)
-
-    # Radar
+    
+    # Contact info - clean table
+    contact_table = doc.add_table(rows=4, cols=2)
+    contact_table.style = 'Light Grid Accent 1'
+    
+    contact_data = [
+        ("Contact", name),
+        ("Email", email),
+        ("Title", role),
+        ("Phone", phone if phone else "—")
+    ]
+    
+    for i, (label, value) in enumerate(contact_data):
+        contact_table.cell(i, 0).text = label
+        contact_table.cell(i, 1).text = value
+        contact_table.cell(i, 0).paragraphs[0].runs[0].font.bold = True
+        contact_table.cell(i, 0).paragraphs[0].runs[0].font.size = Pt(10)
+        contact_table.cell(i, 1).paragraphs[0].runs[0].font.size = Pt(10)
+    
+    doc.add_paragraph("")
+    
+    # Radar chart - larger and prominent
     if include_radar:
         png_bytes = render_radar_png(pillar_scores)
         if png_bytes:
-            doc.add_paragraph("")
-            hdr = doc.add_paragraph()
-            run = hdr.add_run("Readiness Radar")
-            run.bold = True; run.font.name = "Aptos"
-            doc.add_picture(io.BytesIO(png_bytes), width=Inches(5.5))
-            cap = doc.add_paragraph("Relative pillar strengths (0–100).")
-            cap.runs[0].font.size = Pt(8); cap.runs[0].font.name = "Aptos"
-
-    # Table
-    if include_table:
-        doc.add_paragraph("")
-        hdr = doc.add_paragraph()
-        run = hdr.add_run("Pillar Scores")
-        run.bold = True; run.font.name = "Aptos"
-
-        rows = len(pillar_scores) + 1
-        t = doc.add_table(rows=rows, cols=2)
-        t.autofit = True
-
-        h0 = t.cell(0, 0).paragraphs[0].add_run("Pillar")
-        h0.bold = True; h0.font.name = "Aptos"
-        h1 = t.cell(0, 1).paragraphs[0].add_run("Score (0–100)")
-        h1.bold = True; h1.font.name = "Aptos"
-
-        for i, (pname, pscore, _detail) in enumerate(pillar_scores, start=1):
-            t.cell(i, 0).paragraphs[0].add_run(pname).font.name = "Aptos"
-            t.cell(i, 1).paragraphs[0].add_run(str(round(pscore))).font.name = "Aptos"
-
-    # Strengths / gaps / recs
+            radar_hdr = doc.add_paragraph()
+            radar_title = radar_hdr.add_run("Capability Assessment Radar")
+            radar_title.font.size = Pt(12)
+            radar_title.bold = True
+            radar_title.font.color.rgb = RGBColor(0, 51, 102)
+            
+            radar_para = doc.add_paragraph()
+            radar_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            doc.add_picture(io.BytesIO(png_bytes), width=Inches(6.0))
+    
+    # Page break
+    doc.add_page_break()
+    
+    # === PAGE 2: DETAILED ANALYSIS ===
+    
+    # Page 2 header
+    page2_header = doc.add_paragraph()
+    p2h_run = page2_header.add_run("Detailed Assessment Results")
+    p2h_run.font.size = Pt(16)
+    p2h_run.bold = True
+    p2h_run.font.color.rgb = RGBColor(0, 51, 102)
+    
+    doc.add_paragraph("_" * 80)
+    doc.add_paragraph("")
+    
+    # Pillar Scores - Professional table
+    pillar_hdr = doc.add_paragraph()
+    pillar_title = pillar_hdr.add_run("Pillar Performance Summary")
+    pillar_title.font.size = Pt(12)
+    pillar_title.bold = True
+    pillar_title.font.color.rgb = RGBColor(0, 51, 102)
+    
+    # Create professional table
+    score_table = doc.add_table(rows=len(pillar_scores) + 1, cols=3)
+    score_table.style = 'Light Grid Accent 1'
+    
+    # Headers
+    headers = ["Pillar", "Score", "Assessment"]
+    for i, header_text in enumerate(headers):
+        cell = score_table.cell(0, i)
+        cell.text = header_text
+        cell.paragraphs[0].runs[0].font.bold = True
+        cell.paragraphs[0].runs[0].font.size = Pt(11)
+        # Add shading to header
+        shading_elm = OxmlElement('w:shd')
+        shading_elm.set(qn('w:fill'), 'D9E2F3')
+        cell._element.get_or_add_tcPr().append(shading_elm)
+    
+    # Data rows
+    for i, (pname, pscore, _) in enumerate(pillar_scores, start=1):
+        score_table.cell(i, 0).text = pname
+        score_table.cell(i, 1).text = str(round(pscore))
+        
+        # Color code the score
+        score_cell = score_table.cell(i, 1).paragraphs[0].runs[0]
+        if pscore >= 80:
+            score_cell.font.color.rgb = RGBColor(0, 128, 0)  # Green
+        elif pscore >= 60:
+            score_cell.font.color.rgb = RGBColor(0, 102, 204)  # Blue
+        elif pscore >= 40:
+            score_cell.font.color.rgb = RGBColor(255, 140, 0)  # Orange
+        else:
+            score_cell.font.color.rgb = RGBColor(204, 0, 0)  # Red
+        score_cell.bold = True
+        
+        # Assessment text
+        if pscore >= 80:
+            assessment = "Strong"
+        elif pscore >= 60:
+            assessment = "Solid Foundation"
+        elif pscore >= 40:
+            assessment = "Emerging"
+        else:
+            assessment = "Needs Development"
+        score_table.cell(i, 2).text = assessment
+        score_table.cell(i, 2).paragraphs[0].runs[0].font.size = Pt(10)
+    
+    doc.add_paragraph("")
+    
+    # Key Findings
+    findings_hdr = doc.add_paragraph()
+    findings_title = findings_hdr.add_run("Key Findings")
+    findings_title.font.size = Pt(12)
+    findings_title.bold = True
+    findings_title.font.color.rgb = RGBColor(0, 51, 102)
+    
     strengths, gaps = derive_strengths_gaps(pillar_scores)
+    
+    # Strengths
+    strength_para = doc.add_paragraph()
+    strength_label = strength_para.add_run("Areas of Strength:")
+    strength_label.font.bold = True
+    strength_label.font.size = Pt(11)
+    strength_label.font.color.rgb = RGBColor(0, 128, 0)
+    
+    for s in strengths:
+        bullet = doc.add_paragraph(style='List Bullet')
+        bullet.text = s
+        bullet.runs[0].font.size = Pt(10)
+    
     doc.add_paragraph("")
-    hdr = doc.add_paragraph(); run = hdr.add_run("Top Strengths")
-    run.bold = True; run.font.name = "Aptos"
-    for s in strengths: doc.add_paragraph(f"• {s}")
-
-    hdr = doc.add_paragraph(); run = hdr.add_run("Opportunities for Improvement")
-    run.bold = True; run.font.name = "Aptos"
-    for g in gaps: doc.add_paragraph(f"• {g}")
-
+    
+    # Development areas
+    gap_para = doc.add_paragraph()
+    gap_label = gap_para.add_run("Development Priorities:")
+    gap_label.font.bold = True
+    gap_label.font.size = Pt(11)
+    gap_label.font.color.rgb = RGBColor(204, 102, 0)
+    
+    for g in gaps:
+        bullet = doc.add_paragraph(style='List Bullet')
+        bullet.text = g
+        bullet.runs[0].font.size = Pt(10)
+    
+    doc.add_paragraph("")
+    
+    # Recommendations - Numbered and executive style
+    rec_hdr = doc.add_paragraph()
+    rec_title = rec_hdr.add_run("Strategic Recommendations (Next 90 Days)")
+    rec_title.font.size = Pt(12)
+    rec_title.bold = True
+    rec_title.font.color.rgb = RGBColor(0, 51, 102)
+    
     recs = recommend_actions(pillar_scores)
-    hdr = doc.add_paragraph(); run = hdr.add_run("Top 3 Recommendations (Next 90 Days)")
-    run.bold = True; run.font.name = "Aptos"
-    for rec in recs: doc.add_paragraph(f"• {rec}")
-
+    for idx, rec in enumerate(recs, 1):
+        rec_para = doc.add_paragraph(style='List Number')
+        rec_para.text = rec
+        rec_para.runs[0].font.size = Pt(10)
+    
     doc.add_paragraph("")
-    cta = doc.add_paragraph()
-    rr = cta.add_run("Ready to reach a 90+ Channel Readiness score? Book a full XplainIQ GTM Assessment. ")
-    rr.font.name = "Aptos"; rr.font.size = Pt(10)
-
     doc.add_paragraph("")
-    foot = doc.add_paragraph()
-    fr = foot.add_run("© Innovative Networx – XplainIQ™ | Confidential Diagnostic Summary")
-    fr.font.size = Pt(8); fr.font.name = "Aptos"
-    foot.alignment = WD_ALIGN_PARAGRAPH.LEFT
-
+    
+    # Call to action - boxed
+    cta_para = doc.add_paragraph()
+    cta_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    cta_run = cta_para.add_run("Ready to achieve a 90+ Channel Readiness Score?")
+    cta_run.font.size = Pt(12)
+    cta_run.bold = True
+    cta_run.font.color.rgb = RGBColor(0, 51, 102)
+    
+    cta2 = doc.add_paragraph()
+    cta2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    cta2_run = cta2.add_run("Schedule a comprehensive XplainIQ GTM Assessment")
+    cta2_run.font.size = Pt(11)
+    cta2_run.font.color.rgb = RGBColor(89, 89, 89)
+    
+    # Footer
+    doc.add_paragraph("")
+    footer_line = doc.add_paragraph("_" * 80)
+    
+    footer = doc.add_paragraph()
+    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    footer_run = footer.add_run("© Innovative Networx – XplainIQ™ | Confidential & Proprietary")
+    footer_run.font.size = Pt(8)
+    footer_run.font.color.rgb = RGBColor(128, 128, 128)
+    
     buf = io.BytesIO()
     doc.save(buf)
     buf.seek(0)
