@@ -898,7 +898,30 @@ def generate_pdf_report(
             # Title
             story.append(Paragraph("Channel Readiness Assessment", title_style))
             story.append(Paragraph(f"{company}", subtitle_style))
-            story.append(Spacer(1, 0.2*inch))
+            
+            # TSD name if provided
+            tsd_name_str = ""
+            try:
+                row_data = st.session_state.get('current_selected_row', {})
+                tsd_val = row_data.get('tsd_request_name', '')
+                if pd.notna(tsd_val) and tsd_val:
+                    tsd_name_str = str(tsd_val)
+            except:
+                pass
+            
+            if tsd_name_str:
+                tsd_style = ParagraphStyle(
+                    'TSD',
+                    parent=styles['Normal'],
+                    fontSize=10,
+                    textColor=colors.HexColor('#666666'),
+                    spaceAfter=20,
+                    alignment=TA_CENTER,
+                    fontName='Helvetica-Oblique'
+                )
+                story.append(Paragraph(f"Technology Service Distributor: {tsd_name_str}", tsd_style))
+            else:
+                story.append(Spacer(1, 0.2*inch))
             
             # Score box
             score_data = [
@@ -976,6 +999,16 @@ def generate_pdf_report(
             
             story.append(Spacer(1, 0.3*inch))
             
+            # Strategic Recommendations
+            story.append(Paragraph("Strategic Recommendations (Next 90 Days)", heading_style))
+            recs = recommend_actions(pillar_scores)
+            for i, rec in enumerate(recs, 1):
+                rec_para = Paragraph(f"{i}. {rec}", styles['Normal'])
+                story.append(rec_para)
+                story.append(Spacer(1, 0.1*inch))
+            
+            story.append(Spacer(1, 0.3*inch))
+            
             # CTA
             cta_style = ParagraphStyle(
                 'CTA',
@@ -983,10 +1016,33 @@ def generate_pdf_report(
                 fontSize=12,
                 textColor=colors.HexColor('#003366'),
                 alignment=TA_CENTER,
-                fontName='Helvetica-Bold'
+                fontName='Helvetica-Bold',
+                spaceAfter=8
             )
             story.append(Paragraph("Ready to achieve a 90+ Channel Readiness Score?", cta_style))
-            story.append(Paragraph("Schedule a comprehensive XplainIQ GTM Assessment", styles['Normal']))
+            
+            cta_sub_style = ParagraphStyle(
+                'CTASub',
+                parent=styles['Normal'],
+                fontSize=11,
+                textColor=colors.HexColor('#666666'),
+                alignment=TA_CENTER,
+                spaceAfter=20
+            )
+            story.append(Paragraph("Schedule a comprehensive XplainIQ GTM Assessment", cta_sub_style))
+            
+            # Footer
+            footer_style = ParagraphStyle(
+                'Footer',
+                parent=styles['Normal'],
+                fontSize=9,
+                textColor=colors.HexColor('#666666'),
+                alignment=TA_CENTER
+            )
+            story.append(Spacer(1, 0.3*inch))
+            story.append(Paragraph("_" * 80, styles['Normal']))
+            story.append(Spacer(1, 0.1*inch))
+            story.append(Paragraph("© Innovative Networx – XplainIQ™ | Confidential & Proprietary", footer_style))
             
             # Build PDF
             doc.build(story)
@@ -1341,6 +1397,9 @@ else:
         with col4:
             if st.button("📑 Generate PDF", use_container_width=True):
                 try:
+                    # Store row data for PDF generation to access TSD name
+                    st.session_state['current_selected_row'] = selected_row.to_dict()
+                    
                     pdf_bytes = generate_pdf_report(
                         company=str(selected_row['company']),
                         name=str(selected_row['name']),
