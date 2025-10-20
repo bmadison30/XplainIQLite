@@ -581,8 +581,243 @@ def build_docx(
     return buf.read()
 
 # =====
-# Data persistence
+# Email generation functions
 # =====
+def generate_html_email(
+    company: str,
+    name: str,
+    pillar_scores: List[Tuple[str, float, Dict[str, int]]],
+    overall: float,
+    tier: str
+) -> str:
+    """Generate beautiful HTML email for client follow-up"""
+    
+    strengths, gaps = derive_strengths_gaps(pillar_scores)
+    
+    # Generate radar chart as base64 for embedding
+    radar_base64 = ""
+    if HAS_MPL:
+        try:
+            png_bytes = render_radar_png(pillar_scores)
+            if png_bytes:
+                radar_base64 = base64.b64encode(png_bytes).decode('utf-8')
+        except Exception:
+            pass
+    
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {{ font-family: 'Segoe UI', Calibri, Arial, sans-serif; margin: 0; padding: 0; background-color: #f5f5f5; }}
+        .container {{ max-width: 600px; margin: 40px auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }}
+        .header {{ background: linear-gradient(135deg, #003366 0%, #0066cc 100%); color: white; padding: 40px 30px; text-align: center; }}
+        .header h1 {{ margin: 0; font-size: 28px; font-weight: bold; }}
+        .header p {{ margin: 10px 0 0 0; font-size: 16px; opacity: 0.9; }}
+        .content {{ padding: 40px 30px; }}
+        .greeting {{ font-size: 16px; color: #333; margin-bottom: 20px; }}
+        .score-box {{ background: linear-gradient(135deg, #e8f4fd 0%, #d0e8f7 100%); border-radius: 12px; padding: 30px; text-align: center; margin: 30px 0; border: 2px solid #0066cc; }}
+        .score-number {{ font-size: 64px; font-weight: bold; color: #0066cc; margin: 0; line-height: 1; }}
+        .score-label {{ font-size: 18px; color: #003366; margin-top: 10px; font-weight: 600; }}
+        .section {{ margin: 30px 0; }}
+        .section-title {{ font-size: 18px; font-weight: bold; color: #003366; margin-bottom: 15px; border-bottom: 2px solid #0066cc; padding-bottom: 8px; }}
+        .radar-chart {{ text-align: center; margin: 25px 0; }}
+        .radar-chart img {{ max-width: 100%; height: auto; border-radius: 8px; }}
+        .insight-box {{ background: #f8f9fa; border-left: 4px solid #0066cc; padding: 15px 20px; margin: 15px 0; border-radius: 4px; }}
+        .insight-box h4 {{ margin: 0 0 10px 0; color: #003366; font-size: 14px; }}
+        .insight-list {{ margin: 0; padding-left: 20px; color: #555; line-height: 1.8; }}
+        .cta-box {{ background: #003366; color: white; padding: 30px; text-align: center; margin: 30px 0; border-radius: 8px; }}
+        .cta-box h3 {{ margin: 0 0 15px 0; font-size: 22px; }}
+        .cta-button {{ display: inline-block; background: #0066cc; color: white; padding: 15px 40px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; margin-top: 10px; }}
+        .cta-button:hover {{ background: #0052a3; }}
+        .footer {{ background: #f8f9fa; padding: 25px 30px; text-align: center; color: #666; font-size: 13px; border-top: 1px solid #ddd; }}
+        .footer-logo {{ font-weight: bold; color: #003366; font-size: 14px; margin-bottom: 10px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Your Channel Readiness Results</h1>
+            <p>XplainIQ™ Assessment for {company}</p>
+        </div>
+        
+        <div class="content">
+            <div class="greeting">
+                Hi {name},
+            </div>
+            
+            <p style="color: #555; line-height: 1.6;">
+                Thank you for completing the XplainIQ Channel Readiness Assessment. Our team has reviewed your responses, and we're pleased to share your results.
+            </p>
+            
+            <div class="score-box">
+                <div class="score-number">{round(overall)}</div>
+                <div class="score-label">Channel Readiness Score</div>
+                <div style="color: #666; margin-top: 8px; font-size: 16px;">{tier} Maturity Level</div>
+            </div>
+"""
+    
+    # Add radar chart if available
+    if radar_base64:
+        html += f"""
+            <div class="section">
+                <div class="section-title">Your Capability Profile</div>
+                <div class="radar-chart">
+                    <img src="data:image/png;base64,{radar_base64}" alt="Channel Readiness Radar" />
+                </div>
+            </div>
+"""
+    
+    # Add key insights
+    html += f"""
+            <div class="section">
+                <div class="section-title">Key Insights</div>
+                
+                <div class="insight-box" style="border-left-color: #00aa00;">
+                    <h4>✓ Areas of Strength</h4>
+                    <ul class="insight-list">
+"""
+    
+    for strength in strengths[:2]:
+        html += f"                        <li>{strength}</li>\n"
+    
+    html += f"""
+                    </ul>
+                </div>
+                
+                <div class="insight-box" style="border-left-color: #ff8800;">
+                    <h4>→ Development Opportunities</h4>
+                    <ul class="insight-list">
+"""
+    
+    for gap in gaps[:3]:
+        html += f"                        <li>{gap}</li>\n"
+    
+    html += f"""
+                    </ul>
+                </div>
+            </div>
+            
+            <p style="color: #555; line-height: 1.6; margin-top: 30px;">
+                Your {tier.lower()} maturity level indicates a solid foundation with clear paths to optimization. Our advisors have identified specific strategies that can accelerate your channel growth.
+            </p>
+            
+            <div class="cta-box">
+                <h3>Ready to Reach 90+ and Scale Your Channel?</h3>
+                <p style="margin: 15px 0; opacity: 0.95;">
+                    Schedule a complimentary 30-minute strategy session with our GTM advisors to discuss your personalized roadmap.
+                </p>
+                <a href="mailto:info@innovativenetworx.com?subject=Channel Assessment Follow-up - {company}" class="cta-button">
+                    Book Your Strategy Session
+                </a>
+            </div>
+            
+            <p style="color: #555; line-height: 1.6; margin-top: 30px; font-size: 14px;">
+                Questions about your results? Simply reply to this email, and one of our channel strategy advisors will be in touch within 24 hours.
+            </p>
+            
+            <p style="color: #555; margin-top: 30px;">
+                Best regards,<br>
+                <strong>The XplainIQ Team</strong><br>
+                Innovative Networx
+            </p>
+        </div>
+        
+        <div class="footer">
+            <div class="footer-logo">XplainIQ™ by Innovative Networx</div>
+            <div>Engineering Predictable Go-To-Market Outcomes</div>
+            <div style="margin-top: 10px;">
+                © {datetime.now().year} Innovative Networx. Confidential & Proprietary.
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""
+    
+    return html
+
+
+def generate_text_email(
+    company: str,
+    name: str,
+    pillar_scores: List[Tuple[str, float, Dict[str, int]]],
+    overall: float,
+    tier: str
+) -> str:
+    """Generate plain text email for client follow-up"""
+    
+    strengths, gaps = derive_strengths_gaps(pillar_scores)
+    recs = recommend_actions(pillar_scores)
+    
+    text = f"""Subject: Your Channel Readiness Assessment Results - {company}
+
+Hi {name},
+
+Thank you for completing the XplainIQ Channel Readiness Assessment. Our team has reviewed your responses, and I'm pleased to share your results.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+YOUR CHANNEL READINESS SCORE: {round(overall)} / 100
+Maturity Level: {tier}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PILLAR SCORES:
+"""
+    
+    for pname, pscore, _ in pillar_scores:
+        text += f"  • {pname}: {round(pscore)}\n"
+    
+    text += f"""
+KEY INSIGHTS:
+
+✓ Areas of Strength:
+"""
+    
+    for strength in strengths:
+        text += f"  • {strength}\n"
+    
+    text += f"""
+→ Development Opportunities:
+"""
+    
+    for gap in gaps:
+        text += f"  • {gap}\n"
+    
+    text += f"""
+TOP 3 STRATEGIC RECOMMENDATIONS (Next 90 Days):
+
+"""
+    
+    for i, rec in enumerate(recs, 1):
+        text += f"{i}. {rec}\n\n"
+    
+    text += f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+NEXT STEPS:
+
+Your {tier.lower()} maturity level indicates a solid foundation with clear paths to optimization. Our advisors have identified specific strategies that can accelerate your channel growth.
+
+Ready to reach 90+ and scale your channel?
+
+Schedule a complimentary 30-minute strategy session with our GTM advisors to discuss your personalized roadmap.
+
+Reply to this email or contact us at:
+info@innovativenetworx.com
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Questions about your results? Simply reply to this email, and one of our channel strategy advisors will be in touch within 24 hours.
+
+Best regards,
+The XplainIQ Team
+Innovative Networx
+
+XplainIQ™ | Engineering Predictable Go-To-Market Outcomes
+© {datetime.now().year} Innovative Networx. Confidential & Proprietary.
+"""
+    
+    return text
 def init_session_storage():
     if 'leads_db' not in st.session_state:
         st.session_state.leads_db = []
@@ -840,49 +1075,88 @@ else:
             st.success(f"✅ Status updated to: {new_status}")
             st.rerun()
         
-        # Generate DOCX button
-        if st.button("📄 Generate DOCX Report", type="primary"):
-            try:
-                import ast
-                
-                # Parse stored data
-                stored_answers = ast.literal_eval(selected_row['answers']) if isinstance(selected_row['answers'], str) else selected_row['answers']
-                stored_pillar_scores_dict = ast.literal_eval(selected_row['pillar_scores']) if isinstance(selected_row['pillar_scores'], str) else selected_row['pillar_scores']
-                
-                # Reconstruct pillar_scores
-                reconstructed_pillar_scores = []
-                for pname, qids in PILLARS:
-                    pscore = stored_pillar_scores_dict.get(pname, 0)
-                    detail = {q: stored_answers.get(q, 0) for q in qids}
-                    reconstructed_pillar_scores.append((pname, pscore, detail))
-                
-                # Generate DOCX
-                if HAS_DOCX:
-                    report_docx = build_docx(
+        # Parse data once for all report types
+        try:
+            import ast
+            stored_answers = ast.literal_eval(selected_row['answers']) if isinstance(selected_row['answers'], str) else selected_row['answers']
+            stored_pillar_scores_dict = ast.literal_eval(selected_row['pillar_scores']) if isinstance(selected_row['pillar_scores'], str) else selected_row['pillar_scores']
+            
+            # Reconstruct pillar_scores
+            reconstructed_pillar_scores = []
+            for pname, qids in PILLARS:
+                pscore = stored_pillar_scores_dict.get(pname, 0)
+                detail = {q: stored_answers.get(q, 0) for q in qids}
+                reconstructed_pillar_scores.append((pname, pscore, detail))
+        except Exception as e:
+            st.error(f"Error parsing data: {e}")
+            reconstructed_pillar_scores = []
+        
+        # Three-column layout for report options
+        st.markdown("---")
+        st.subheader("📬 Delivery Options")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        # Option 1: DOCX Download
+        with col1:
+            if st.button("📄 Generate DOCX", use_container_width=True, type="primary"):
+                try:
+                    if HAS_DOCX:
+                        report_docx = build_docx(
+                            company=str(selected_row['company']),
+                            name=str(selected_row['name']),
+                            email=str(selected_row['email']),
+                            role=str(selected_row['role']),
+                            phone=str(selected_row.get('phone', '')),
+                            pillar_scores=reconstructed_pillar_scores,
+                            overall=float(selected_row['score_overall']),
+                            brand_name=BRAND_NAME,
+                            tsd_name=str(selected_row.get('tsd_request_name', '')) if pd.notna(selected_row.get('tsd_request_name')) else None,
+                            include_radar=True,
+                            include_table=True,
+                        )
+                        
+                        st.session_state['generated_docx'] = report_docx
+                        st.session_state['docx_filename'] = f"{str(selected_row['company']).replace(' ', '')}_ChannelReadiness_{datetime.now().strftime('%Y%m%d_%H%M')}.docx"
+                        st.success("✅ DOCX ready!")
+                    else:
+                        st.error("❌ DOCX library not available")
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
+        
+        # Option 2: HTML Email
+        with col2:
+            if st.button("📧 Copy HTML Email", use_container_width=True):
+                try:
+                    html_email = generate_html_email(
                         company=str(selected_row['company']),
                         name=str(selected_row['name']),
-                        email=str(selected_row['email']),
-                        role=str(selected_row['role']),
-                        phone=str(selected_row.get('phone', '')),
                         pillar_scores=reconstructed_pillar_scores,
                         overall=float(selected_row['score_overall']),
-                        brand_name=BRAND_NAME,
-                        tsd_name=str(selected_row.get('tsd_request_name', '')) if pd.notna(selected_row.get('tsd_request_name')) else None,
-                        include_radar=True,
-                        include_table=True,
+                        tier=str(selected_row['tier'])
                     )
-                    
-                    # Store in session for download
-                    st.session_state['generated_docx'] = report_docx
-                    st.session_state['docx_filename'] = f"{str(selected_row['company']).replace(' ', '')}_ChannelReadiness_{datetime.now().strftime('%Y%m%d_%H%M')}.docx"
-                    
-                    st.success("✅ Report generated successfully!")
-                else:
-                    st.error("❌ DOCX library not available")
-            except Exception as e:
-                st.error(f"❌ Error generating report: {e}")
+                    st.session_state['html_email'] = html_email
+                    st.success("✅ HTML ready to copy!")
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
         
-        # Download button (appears after generation)
+        # Option 3: Plain Text Email
+        with col3:
+            if st.button("📋 Copy Text Email", use_container_width=True):
+                try:
+                    text_email = generate_text_email(
+                        company=str(selected_row['company']),
+                        name=str(selected_row['name']),
+                        pillar_scores=reconstructed_pillar_scores,
+                        overall=float(selected_row['score_overall']),
+                        tier=str(selected_row['tier'])
+                    )
+                    st.session_state['text_email'] = text_email
+                    st.success("✅ Text ready to copy!")
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
+        
+        # Display outputs
         if 'generated_docx' in st.session_state:
             st.download_button(
                 "⬇️ Download DOCX Report",
@@ -891,6 +1165,16 @@ else:
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 key="download_docx"
             )
+        
+        if 'html_email' in st.session_state:
+            with st.expander("📧 HTML Email (Copy & Paste into Email Client)", expanded=True):
+                st.code(st.session_state['html_email'], language='html')
+                st.caption("💡 Tip: Copy all text above and paste into your email client's HTML view")
+        
+        if 'text_email' in st.session_state:
+            with st.expander("📋 Plain Text Email (Copy & Paste)", expanded=True):
+                st.text_area("Email Content", st.session_state['text_email'], height=400, key="text_display")
+                st.caption("💡 Tip: Copy the text above for LinkedIn, SMS, or plain text emails")
         
         # Preview scores
         with st.expander("🔍 Preview Scores & Recommendations"):
