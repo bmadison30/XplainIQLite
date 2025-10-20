@@ -171,7 +171,12 @@ def _favicon_image():
 st.set_page_config(
     page_title="XplainIQ lite – Channel Readiness Scoring Index",
     page_icon=_favicon_image() or "🔎",
-    layout="centered"
+    layout="centered",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': None
+    }
 )
 
 # =====
