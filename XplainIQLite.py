@@ -1235,7 +1235,7 @@ if not admin_flag:
             ok, msg = persist_lead(payload)
             if ok:
                 st.success("✅ **Thank you for your submission!**")
-                st.info("📧 Our advisors will review your responses and send your personalized Channel Readiness Report via email within 2-3 business days.")
+                st.info("📧 Our advisors will review your responses and send your personalized XplainIQ lite - Channel Readiness Scoring Index Report via email within 2-3 business days.")
                 st.balloons()
             else:
                 st.error(f"❌ Submission error: {msg}")
