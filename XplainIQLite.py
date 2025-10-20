@@ -35,6 +35,18 @@ try:
 except Exception:
     HAS_DOCX = False
 
+# Optional PDF generation
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+    HAS_REPORTLAB = True
+except Exception:
+    HAS_REPORTLAB = False
+
 # =========================
 # Paths & Brand
 # =========================
@@ -818,6 +830,175 @@ XplainIQ™ | Engineering Predictable Go-To-Market Outcomes
 """
     
     return text
+
+
+def generate_pdf_report(
+    company: str,
+    name: str,
+    pillar_scores: List[Tuple[str, float, Dict[str, int]]],
+    overall: float,
+    tier: str
+) -> Optional[bytes]:
+    """Generate PDF from HTML email template using weasyprint or reportlab fallback"""
+    
+    try:
+        # Try using weasyprint (best quality, but requires system libraries)
+        from weasyprint import HTML
+        
+        html_content = generate_html_email(company, name, pillar_scores, overall, tier)
+        pdf_bytes = HTML(string=html_content).write_pdf()
+        return pdf_bytes
+        
+    except ImportError:
+        # Fallback: Try reportlab (pure Python, always works)
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.lib.units import inch
+            from reportlab.lib import colors
+            from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.enums import TA_CENTER, TA_LEFT
+            
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+            
+            styles = getSampleStyleSheet()
+            story = []
+            
+            # Custom styles
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=24,
+                textColor=colors.HexColor('#003366'),
+                spaceAfter=6,
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            
+            subtitle_style = ParagraphStyle(
+                'CustomSubtitle',
+                parent=styles['Normal'],
+                fontSize=14,
+                textColor=colors.HexColor('#666666'),
+                spaceAfter=20,
+                alignment=TA_CENTER
+            )
+            
+            heading_style = ParagraphStyle(
+                'CustomHeading',
+                parent=styles['Heading2'],
+                fontSize=16,
+                textColor=colors.HexColor('#003366'),
+                spaceAfter=12,
+                spaceBefore=20,
+                fontName='Helvetica-Bold'
+            )
+            
+            # Title
+            story.append(Paragraph("Channel Readiness Assessment", title_style))
+            story.append(Paragraph(f"{company}", subtitle_style))
+            story.append(Spacer(1, 0.2*inch))
+            
+            # Score box
+            score_data = [
+                ['Channel Readiness Score'],
+                [f'{round(overall)}'],
+                [f'{tier} Maturity']
+            ]
+            score_table = Table(score_data, colWidths=[4*inch])
+            score_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#003366')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 12),
+                ('FONTSIZE', (0, 1), (-1, 1), 48),
+                ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+                ('TEXTCOLOR', (0, 1), (-1, 1), colors.HexColor('#0066cc')),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 15),
+                ('TOPPADDING', (0, 0), (-1, -1), 15),
+                ('BOX', (0, 0), (-1, -1), 2, colors.HexColor('#0066cc')),
+                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#e8f4fd')),
+            ]))
+            story.append(score_table)
+            story.append(Spacer(1, 0.3*inch))
+            
+            # Contact info
+            story.append(Paragraph("Contact Information", heading_style))
+            contact_data = [
+                ['Contact:', name],
+                ['Company:', company]
+            ]
+            contact_table = Table(contact_data, colWidths=[1.5*inch, 4*inch])
+            contact_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ]))
+            story.append(contact_table)
+            story.append(Spacer(1, 0.2*inch))
+            
+            # Pillar scores
+            story.append(Paragraph("Pillar Performance", heading_style))
+            pillar_data = [['Pillar', 'Score']]
+            for pname, pscore, _ in pillar_scores:
+                pillar_data.append([pname, str(round(pscore))])
+            
+            pillar_table = Table(pillar_data, colWidths=[4*inch, 1*inch])
+            pillar_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#d9e2f3')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ('TOPPADDING', (0, 0), (-1, -1), 10),
+                ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ]))
+            story.append(pillar_table)
+            story.append(Spacer(1, 0.2*inch))
+            
+            # Key insights
+            strengths, gaps = derive_strengths_gaps(pillar_scores)
+            
+            story.append(Paragraph("Key Insights", heading_style))
+            story.append(Paragraph("<b>Areas of Strength:</b>", styles['Normal']))
+            for strength in strengths:
+                story.append(Paragraph(f"• {strength}", styles['Normal']))
+            
+            story.append(Spacer(1, 0.15*inch))
+            story.append(Paragraph("<b>Development Opportunities:</b>", styles['Normal']))
+            for gap in gaps:
+                story.append(Paragraph(f"• {gap}", styles['Normal']))
+            
+            story.append(Spacer(1, 0.3*inch))
+            
+            # CTA
+            cta_style = ParagraphStyle(
+                'CTA',
+                parent=styles['Normal'],
+                fontSize=12,
+                textColor=colors.HexColor('#003366'),
+                alignment=TA_CENTER,
+                fontName='Helvetica-Bold'
+            )
+            story.append(Paragraph("Ready to achieve a 90+ Channel Readiness Score?", cta_style))
+            story.append(Paragraph("Schedule a comprehensive XplainIQ GTM Assessment", styles['Normal']))
+            
+            # Build PDF
+            doc.build(story)
+            buffer.seek(0)
+            return buffer.read()
+            
+        except ImportError:
+            # Neither library available
+            return None
+    
+    except Exception:
+        return None
 def init_session_storage():
     if 'leads_db' not in st.session_state:
         st.session_state.leads_db = []
@@ -1091,11 +1272,11 @@ else:
             st.error(f"Error parsing data: {e}")
             reconstructed_pillar_scores = []
         
-        # Three-column layout for report options
+        # Four-column layout for report options
         st.markdown("---")
         st.subheader("📬 Delivery Options")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         
         # Option 1: DOCX Download
         with col1:
@@ -1156,6 +1337,26 @@ else:
                 except Exception as e:
                     st.error(f"❌ Error: {e}")
         
+        # Option 4: PDF Download
+        with col4:
+            if st.button("📑 Generate PDF", use_container_width=True):
+                try:
+                    pdf_bytes = generate_pdf_report(
+                        company=str(selected_row['company']),
+                        name=str(selected_row['name']),
+                        pillar_scores=reconstructed_pillar_scores,
+                        overall=float(selected_row['score_overall']),
+                        tier=str(selected_row['tier'])
+                    )
+                    if pdf_bytes:
+                        st.session_state['generated_pdf'] = pdf_bytes
+                        st.session_state['pdf_filename'] = f"{str(selected_row['company']).replace(' ', '')}_Assessment_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+                        st.success("✅ PDF ready!")
+                    else:
+                        st.error("❌ PDF generation requires additional libraries")
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
+        
         # Display outputs
         if 'generated_docx' in st.session_state:
             st.download_button(
@@ -1164,6 +1365,15 @@ else:
                 file_name=st.session_state['docx_filename'],
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 key="download_docx"
+            )
+        
+        if 'generated_pdf' in st.session_state:
+            st.download_button(
+                "⬇️ Download PDF Report",
+                data=st.session_state['generated_pdf'],
+                file_name=st.session_state['pdf_filename'],
+                mime="application/pdf",
+                key="download_pdf"
             )
         
         if 'html_email' in st.session_state:
