@@ -1,0 +1,8 @@
+﻿# Don't commit sensitive data
+leads.csv
+*.env
+secrets.toml
+
+# Python
+__pycache__/
+*.pyc
