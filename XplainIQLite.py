@@ -1150,6 +1150,35 @@ admin_flag = str(get_query_param("admin", "0")).lower() in ("1", "true", "yes")
 debug_mode = str(get_query_param("debug", "0")).lower() in ("1", "true", "yes")
 
 # =====
+# Admin password protection
+# =====
+ADMIN_PASSWORD = "XplainIQ2025!"  # Change this to your secure password
+
+def check_admin_password():
+    """Check if admin is authenticated"""
+    if 'admin_authenticated' not in st.session_state:
+        st.session_state.admin_authenticated = False
+    return st.session_state.admin_authenticated
+
+def admin_login():
+    """Display admin login form"""
+    st.title("🔒 Admin Access")
+    st.write("Please enter the admin password to continue.")
+    
+    with st.form("admin_login_form"):
+        password = st.text_input("Password", type="password")
+        submit = st.form_submit_button("Login")
+        
+        if submit:
+            if password == ADMIN_PASSWORD:
+                st.session_state.admin_authenticated = True
+                st.success("✅ Access granted!")
+                st.rerun()
+            else:
+                st.error("❌ Incorrect password. Access denied.")
+                st.stop()
+
+# =====
 # Header
 # =====
 show_logo_any(ASSET_LOGO_PATH, width=220, show_debug=debug_mode)
@@ -1251,7 +1280,19 @@ if not admin_flag:
 # ADMIN MODE
 # =====
 else:
+    # Check authentication first
+    if not check_admin_password():
+        admin_login()
+        st.stop()
+    
     st.write("Admin panel for reviewing submissions and generating reports.")
+    
+    # Logout button
+    col_logout, col_space = st.columns([1, 5])
+    with col_logout:
+        if st.button("🚪 Logout"):
+            st.session_state.admin_authenticated = False
+            st.rerun()
     
     st.markdown("---")
     st.subheader("📊 Latest Submissions")
